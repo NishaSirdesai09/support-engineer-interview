@@ -1,9 +1,5 @@
 const MAX_AMOUNT = 10_000;
 
-/**
- * Normalize amount string: strip leading zeros, max 2 decimal places.
- * VAL-209: avoids "007.50" in records; use for display and submit.
- */
 export function normalizeAmount(value: string): string {
   const parsed = parseFloat(value.replace(/,/g, "").trim());
   if (Number.isNaN(parsed)) return value.trim();
@@ -11,10 +7,6 @@ export function normalizeAmount(value: string): string {
   return clamped.toFixed(2);
 }
 
-/**
- * Validator for funding amount. Reject zero, enforce range and format.
- * VAL-205: amount must be > 0. VAL-209: reject confusing leading zeros.
- */
 export function validateFundingAmount(value: string): string | null {
   const raw = value?.trim().replace(/,/g, "") ?? "";
   if (!raw) return "Amount is required.";

@@ -51,14 +51,29 @@ if (command === "list-users") {
   } else {
     const user = db.prepare("SELECT id FROM users WHERE email = ?").get(email);
     if (user) {
-      db.exec(`DELETE FROM sessions WHERE user_id = ${user.id}`);
-      db.exec(`DELETE FROM transactions WHERE account_id IN (SELECT id FROM accounts WHERE user_id = ${user.id})`);
-      db.exec(`DELETE FROM accounts WHERE user_id = ${user.id}`);
-      db.exec(`DELETE FROM users WHERE id = ${user.id}`);
+      db.prepare("DELETE FROM sessions WHERE user_id = ?").run(user.id);
+      db.prepare("DELETE FROM transactions WHERE account_id IN (SELECT id FROM accounts WHERE user_id = ?)").run(
+        user.id
+      );
+      db.prepare("DELETE FROM accounts WHERE user_id = ?").run(user.id);
+      db.prepare("DELETE FROM users WHERE id = ?").run(user.id);
       console.log(`User ${email} and all related data deleted!`);
     } else {
       console.log(`User ${email} not found`);
     }
+  }
+} else if (command === "show-ssn-check") {
+  console.log("\n=== Users (id, email, ssn stored?, ssn_last4) - for SEC-301 check ===\n");
+  const rows = db.prepare("SELECT id, email, ssn, ssn_last4 FROM users ORDER BY id DESC LIMIT 10").all();
+  if (rows.length === 0) {
+    console.log("No users found");
+  } else {
+    rows.forEach((r) => {
+      const encrypted = (r.ssn || "").startsWith("enc:v1:") ? "enc:v1:... (encrypted)" : "plaintext/legacy";
+      console.log(`id: ${r.id}, email: ${r.email}`);
+      console.log(`  ssn: ${encrypted}, ssn_last4: ${r.ssn_last4 ?? "(null)"}`);
+      console.log("");
+    });
   }
 } else {
   console.log(`
@@ -66,14 +81,16 @@ Database Utilities
 ==================
 
 Commands:
-  npm run db:list-users     - List all users
-  npm run db:list-sessions  - List all sessions
-  npm run db:clear          - Clear all data
-  npm run db:delete-user    - Delete a specific user by email
+  npm run db:list-users       - List all users
+  npm run db:list-sessions    - List all sessions
+  npm run db:show-ssn-check   - Show SSN storage (encrypted vs plain), ssn_last4 (no sqlite3 needed)
+  npm run db:clear            - Clear all data
+  npm run db:delete-user      - Delete a specific user by email
 
 Examples:
   npm run db:list-users
   npm run db:list-sessions
+  npm run db:show-ssn-check
   npm run db:clear
   npm run db:delete-user test@example.com
   `);

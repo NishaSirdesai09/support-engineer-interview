@@ -1,7 +1,3 @@
-/**
- * Shared validation: one validator per domain (returns error message or null),
- * Zod schemas for API, and form helpers. Import from here or from specific modules.
- */
 export type { Validator } from "./refine";
 export { refineWith, toFormValidate } from "./refine";
 
@@ -41,3 +37,12 @@ export { validateCardNumber } from "./card";
 export { validatePassword, passwordSchema } from "./password";
 
 export { validateRoutingNumber } from "./routing";
+
+export {
+  normalizeZipCode,
+  validateZipCode,
+  zipSchema,
+  fetchZipDetails,
+  validateZipInState,
+} from "./zip";
+export type { ZipDetails } from "./zip";

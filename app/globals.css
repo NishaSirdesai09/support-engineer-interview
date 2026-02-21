@@ -78,3 +78,7 @@ body {
 .form-input::placeholder {
   color: var(--input-placeholder);
 }
+
+.form-input[type="password"]::-ms-reveal {
+  display: none;
+}

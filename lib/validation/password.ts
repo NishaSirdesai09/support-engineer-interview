@@ -9,10 +9,6 @@ const COMMON_PASSWORDS = new Set(
   )
 );
 
-/**
- * Validator for password. Complexity: 8+ chars, upper, lower, number, special.
- * VAL-208: strong requirements to reduce account security risk.
- */
 export function validatePassword(value: string): string | null {
   const s = value ?? "";
   if (s.length < MIN_LENGTH) return `Password must be at least ${MIN_LENGTH} characters.`;

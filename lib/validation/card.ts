@@ -1,6 +1,3 @@
-/**
- * Luhn (mod 10) check for card number. Catches typos and transposition.
- */
 function luhnCheck(digits: string): boolean {
   let sum = 0;
   let alternate = false;
@@ -16,14 +13,9 @@ function luhnCheck(digits: string): boolean {
   return sum % 10 === 0;
 }
 
-/** Card length by type (without spaces). Standard lengths 13-19. */
 const MIN_LENGTH = 13;
 const MAX_LENGTH = 19;
 
-/**
- * BIN prefix ranges (first digits). VAL-210: support Visa, MC, Amex, Discover.
- * Visa: 4; MC: 51-55, 2221-2720; Amex: 34, 37; Discover: 6011, 65, 644-649.
- */
 function hasKnownPrefix(digits: string): boolean {
   if (digits.startsWith("4")) return true;
   if (/^5[1-5]/.test(digits)) return true;
@@ -34,10 +26,6 @@ function hasKnownPrefix(digits: string): boolean {
   return false;
 }
 
-/**
- * Validator for card number. Luhn + length + known BIN prefix.
- * VAL-206: invalid numbers rejected. VAL-210: valid cards (Visa, MC, Amex, Discover) accepted.
- */
 export function validateCardNumber(value: string): string | null {
   const digits = (value ?? "").replace(/\D/g, "");
   if (digits.length < MIN_LENGTH) return `Card number must be ${MIN_LENGTH}-${MAX_LENGTH} digits.`;

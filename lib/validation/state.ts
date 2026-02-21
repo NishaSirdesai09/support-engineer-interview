@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { refineWith } from "./refine";
 
-/** Valid USPS 2-letter state/territory codes (50 states + DC + common territories). */
 const STATE_CODES_SET = new Set([
   "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "DC", "FL", "GA", "HI", "ID", "IL", "IN", "IA",
   "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM",
@@ -10,12 +9,8 @@ const STATE_CODES_SET = new Set([
   "AS", "GU", "MP", "PR", "VI",
 ]);
 
-/** Sorted list of state codes for dropdowns. */
 export const STATE_CODES_SORTED = [...STATE_CODES_SET].sort();
 
-/**
- * Single validator for state code. Returns an error message or null if valid.
- */
 export function validateState(code: string): string | null {
   const normalized = code?.trim().toUpperCase() ?? "";
   if (!normalized) return "State is required.";
@@ -24,7 +19,6 @@ export function validateState(code: string): string | null {
   return null;
 }
 
-/** Zod schema for signup/API. */
 export const stateSchema = z
   .string()
   .min(1, "State is required.")

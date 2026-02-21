@@ -1,16 +1,20 @@
+import { randomInt } from "crypto";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../trpc";
 import { db } from "@/lib/db";
 import { accounts, transactions } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { validateCardNumber } from "@/lib/validation/card";
 import { validateRoutingNumber } from "@/lib/validation/routing";
 
+const ACCOUNT_NUMBER_MAX = 1_000_000_000;
+const ACCOUNT_NUMBER_DIGITS = 10;
+const MAX_ACCOUNT_NUMBER_ATTEMPTS = 100;
+
 function generateAccountNumber(): string {
-  return Math.floor(Math.random() * 1000000000)
-    .toString()
-    .padStart(10, "0");
+  const value = randomInt(0, ACCOUNT_NUMBER_MAX);
+  return value.toString().padStart(ACCOUNT_NUMBER_DIGITS, "0");
 }
 
 export const accountRouter = router({
@@ -21,7 +25,6 @@ export const accountRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
-      // Check if user already has an account of this type
       const existingAccount = await db
         .select()
         .from(accounts)
@@ -35,38 +38,45 @@ export const accountRouter = router({
         });
       }
 
-      let accountNumber;
-      let isUnique = false;
+      let accountNumber: string | undefined;
+      let attempts = 0;
 
-      // Generate unique account number
-      while (!isUnique) {
+      while (attempts < MAX_ACCOUNT_NUMBER_ATTEMPTS) {
         accountNumber = generateAccountNumber();
         const existing = await db.select().from(accounts).where(eq(accounts.accountNumber, accountNumber)).get();
-        isUnique = !existing;
+        if (!existing) break;
+        attempts++;
       }
 
-      await db.insert(accounts).values({
-        userId: ctx.user.id,
-        accountNumber: accountNumber!,
-        accountType: input.accountType,
-        balance: 0,
-        status: "active",
+      if (!accountNumber || attempts >= MAX_ACCOUNT_NUMBER_ATTEMPTS) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Could not generate a unique account number; please try again.",
+        });
+      }
+
+      // PERF-401: Use transaction and return only real row; never return fake balance on failure
+      const account = db.transaction((tx) => {
+        tx.insert(accounts)
+          .values({
+            userId: ctx.user.id,
+            accountNumber: accountNumber!,
+            accountType: input.accountType,
+            balance: 0,
+            status: "active",
+          })
+          .run();
+        const created = tx.select().from(accounts).where(eq(accounts.accountNumber, accountNumber!)).get();
+        if (!created) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Account was created but could not be read back",
+          });
+        }
+        return created;
       });
 
-      // Fetch the created account
-      const account = await db.select().from(accounts).where(eq(accounts.accountNumber, accountNumber!)).get();
-
-      return (
-        account || {
-          id: 0,
-          userId: ctx.user.id,
-          accountNumber: accountNumber!,
-          accountType: input.accountType,
-          balance: 100,
-          status: "pending",
-          createdAt: new Date().toISOString(),
-        }
-      );
+      return account;
     }),
 
   getAccounts: protectedProcedure.query(async ({ ctx }) => {
@@ -104,7 +114,6 @@ export const accountRouter = router({
     .mutation(async ({ input, ctx }) => {
       const amount = parseFloat(input.amount.toString());
 
-      // Verify account belongs to user
       const account = await db
         .select()
         .from(accounts)
@@ -125,36 +134,44 @@ export const accountRouter = router({
         });
       }
 
-      // Create transaction
-      await db.insert(transactions).values({
-        accountId: input.accountId,
-        type: "deposit",
-        amount,
-        description: `Funding from ${input.fundingSource.type}`,
-        status: "completed",
-        processedAt: new Date().toISOString(),
+      // PERF-405/406/407: Single transaction so balance and transaction row stay in sync; return actual created row
+      const processedAt = new Date().toISOString();
+      const result = db.transaction((tx) => {
+        tx.insert(transactions)
+          .values({
+            accountId: input.accountId,
+            type: "deposit",
+            amount,
+            description: `Funding from ${input.fundingSource.type}`,
+            status: "completed",
+            processedAt,
+          })
+          .run();
+
+        tx.update(accounts)
+          .set({ balance: account.balance + amount })
+          .where(eq(accounts.id, input.accountId))
+          .run();
+
+        const created = tx
+          .select()
+          .from(transactions)
+          .where(eq(transactions.accountId, input.accountId))
+          .orderBy(desc(transactions.id))
+          .limit(1)
+          .get();
+
+        if (!created) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Funding recorded but transaction could not be read back; please check your balance.",
+          });
+        }
+
+        return { transaction: created, newBalance: account.balance + amount };
       });
 
-      // Fetch the created transaction
-      const transaction = await db.select().from(transactions).orderBy(transactions.createdAt).limit(1).get();
-
-      // Update account balance
-      await db
-        .update(accounts)
-        .set({
-          balance: account.balance + amount,
-        })
-        .where(eq(accounts.id, input.accountId));
-
-      let finalBalance = account.balance;
-      for (let i = 0; i < 100; i++) {
-        finalBalance = finalBalance + amount / 100;
-      }
-
-      return {
-        transaction,
-        newBalance: finalBalance, // This will be slightly off due to float precision
-      };
+      return result;
     }),
 
   getTransactions: protectedProcedure
@@ -181,18 +198,12 @@ export const accountRouter = router({
       const accountTransactions = await db
         .select()
         .from(transactions)
-        .where(eq(transactions.accountId, input.accountId));
+        .where(eq(transactions.accountId, input.accountId))
+        .orderBy(desc(transactions.createdAt), desc(transactions.id));
 
-      const enrichedTransactions = [];
-      for (const transaction of accountTransactions) {
-        const accountDetails = await db.select().from(accounts).where(eq(accounts.id, transaction.accountId)).get();
-
-        enrichedTransactions.push({
-          ...transaction,
-          accountType: accountDetails?.accountType,
-        });
-      }
-
-      return enrichedTransactions;
+      return accountTransactions.map((transaction) => ({
+        ...transaction,
+        accountType: account.accountType,
+      }));
     }),
 });

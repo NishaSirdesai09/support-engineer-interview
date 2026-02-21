@@ -7,14 +7,9 @@ const dbPath = "bank.db";
 const sqlite = new Database(dbPath);
 export const db = drizzle(sqlite, { schema });
 
-const connections: Database.Database[] = [];
-
 export function initDb() {
-  const conn = new Database(dbPath);
-  connections.push(conn);
-
-  // Create tables if they don't exist
-  sqlite.exec(`
+  try {
+    sqlite.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       email TEXT UNIQUE NOT NULL,
@@ -24,12 +19,20 @@ export function initDb() {
       phone_number TEXT NOT NULL,
       date_of_birth TEXT NOT NULL,
       ssn TEXT NOT NULL,
+      ssn_last4 TEXT,
       address TEXT NOT NULL,
       city TEXT NOT NULL,
       state TEXT NOT NULL,
       zip_code TEXT NOT NULL,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
+  `);
+  try {
+    sqlite.exec(`ALTER TABLE users ADD COLUMN ssn_last4 TEXT`);
+  } catch {
+    /* ssn_last4 column already exists */
+  }
+  sqlite.exec(`
 
     CREATE TABLE IF NOT EXISTS accounts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -59,8 +62,16 @@ export function initDb() {
       expires_at TEXT NOT NULL,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE INDEX IF NOT EXISTS idx_transactions_account_id ON transactions(account_id);
+    CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
+    CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+    CREATE INDEX IF NOT EXISTS idx_accounts_user_id ON accounts(user_id);
   `);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`Database initialization failed: ${message}. Check that bank.db is writable and not corrupted.`);
+  }
 }
 
-// Initialize database on import
 initDb();
