@@ -6,12 +6,17 @@ import { publicProcedure, router } from "../trpc";
 import { db } from "@/lib/db";
 import { users, sessions } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { isValidEmailTLD, normalizeEmail, EMAIL_TLD_ERROR } from "@/lib/validation/email";
 
 export const authRouter = router({
   signup: publicProcedure
     .input(
       z.object({
-        email: z.string().email().toLowerCase(),
+        email: z
+          .string()
+          .email("Invalid email address")
+          .transform(normalizeEmail)
+          .refine(isValidEmailTLD, { message: EMAIL_TLD_ERROR }),
         password: z.string().min(8),
         firstName: z.string().min(1),
         lastName: z.string().min(1),
@@ -78,7 +83,11 @@ export const authRouter = router({
   login: publicProcedure
     .input(
       z.object({
-        email: z.string().email(),
+        email: z
+          .string()
+          .email("Invalid email address")
+          .transform(normalizeEmail)
+          .refine(isValidEmailTLD, { message: EMAIL_TLD_ERROR }),
         password: z.string(),
       })
     )

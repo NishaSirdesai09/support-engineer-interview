@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { trpc } from "@/lib/trpc/client";
 import Link from "next/link";
+import { normalizeEmail, isValidEmailTLD, EMAIL_TLD_ERROR } from "@/lib/validation/email";
 
 type SignupFormData = {
   email: string;
@@ -32,6 +33,8 @@ export default function SignupPage() {
     formState: { errors },
     watch,
     trigger,
+    getValues,
+    setValue,
   } = useForm<SignupFormData>();
   const signupMutation = trpc.auth.signup.useMutation();
 
@@ -83,8 +86,13 @@ export default function SignupPage() {
                   {...register("email", {
                     required: "Email is required",
                     pattern: {
-                      value: /^\S+@\S+$/i,
+                      value: /^\S+@\S+\.\S+$/i,
                       message: "Invalid email address",
+                    },
+                    validate: (v) => isValidEmailTLD(v || "") || EMAIL_TLD_ERROR,
+                    onBlur: () => {
+                      const raw = getValues("email");
+                      if (raw) setValue("email", normalizeEmail(raw), { shouldValidate: true });
                     },
                   })}
                   type="email"
