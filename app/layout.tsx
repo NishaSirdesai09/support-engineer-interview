@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { TRPCProvider } from "@/lib/trpc/Provider";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -18,14 +19,27 @@ export const metadata: Metadata = {
   description: "Simple and secure online banking account signup",
 };
 
+const themeScript = `
+(function() {
+  var stored = localStorage.getItem('theme');
+  var dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  var theme = stored === 'dark' || stored === 'light' ? stored : (dark ? 'dark' : 'light');
+  document.documentElement.setAttribute('data-theme', theme);
+})();
+`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <ThemeToggle />
         <TRPCProvider>{children}</TRPCProvider>
       </body>
     </html>
