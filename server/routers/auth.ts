@@ -9,16 +9,18 @@ import { eq } from "drizzle-orm";
 import { emailSchema } from "@/lib/validation/email";
 import { dateOfBirthSchema } from "@/lib/validation/dateOfBirth";
 import { stateSchema } from "@/lib/validation/state";
+import { phoneSchema } from "@/lib/validation/phone";
+import { passwordSchema } from "@/lib/validation/password";
 
 export const authRouter = router({
   signup: publicProcedure
     .input(
       z.object({
         email: emailSchema,
-        password: z.string().min(8),
+        password: passwordSchema,
         firstName: z.string().min(1),
         lastName: z.string().min(1),
-        phoneNumber: z.string().regex(/^\+?\d{10,15}$/),
+        phoneNumber: phoneSchema,
         dateOfBirth: dateOfBirthSchema,
         ssn: z.string().regex(/^\d{9}$/),
         address: z.string().min(1),

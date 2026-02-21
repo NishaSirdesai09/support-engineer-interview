@@ -8,6 +8,8 @@ import Link from "next/link";
 import { normalizeEmail, validateEmail } from "@/lib/validation/email";
 import { validateDateOfBirth, getDateOfBirthMin, getDateOfBirthMax } from "@/lib/validation/dateOfBirth";
 import { validateState, STATE_CODES_SORTED } from "@/lib/validation/state";
+import { validatePhone, normalizePhone } from "@/lib/validation/phone";
+import { validatePassword } from "@/lib/validation/password";
 import { toFormValidate } from "@/lib/validation/refine";
 
 type SignupFormData = {
@@ -105,18 +107,7 @@ export default function SignupPage() {
                 </label>
                 <input
                   {...register("password", {
-                    required: "Password is required",
-                    minLength: {
-                      value: 8,
-                      message: "Password must be at least 8 characters",
-                    },
-                    validate: {
-                      notCommon: (value) => {
-                        const commonPasswords = ["password", "12345678", "qwerty"];
-                        return !commonPasswords.includes(value.toLowerCase()) || "Password is too common";
-                      },
-                      hasNumber: (value) => /\d/.test(value) || "Password must contain a number",
-                    },
+                    validate: toFormValidate(validatePassword),
                   })}
                   type="password"
                   className="form-input mt-1 block w-full rounded-md border shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2"
@@ -177,14 +168,14 @@ export default function SignupPage() {
                 </label>
                 <input
                   {...register("phoneNumber", {
-                    required: "Phone number is required",
-                    pattern: {
-                      value: /^\d{10}$/,
-                      message: "Phone number must be 10 digits",
+                    validate: toFormValidate(validatePhone),
+                    onBlur: () => {
+                      const raw = getValues("phoneNumber");
+                      if (raw) setValue("phoneNumber", normalizePhone(raw), { shouldValidate: true });
                     },
                   })}
                   type="tel"
-                  placeholder="1234567890"
+                  placeholder="+1234567890 or 10+ digits"
                   className="form-input mt-1 block w-full rounded-md border shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2"
                 />
                 {errors.phoneNumber && <p className="mt-1 text-sm text-red-600">{errors.phoneNumber.message}</p>}

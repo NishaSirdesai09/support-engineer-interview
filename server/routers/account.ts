@@ -4,6 +4,8 @@ import { protectedProcedure, router } from "../trpc";
 import { db } from "@/lib/db";
 import { accounts, transactions } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
+import { validateCardNumber } from "@/lib/validation/card";
+import { validateRoutingNumber } from "@/lib/validation/routing";
 
 function generateAccountNumber(): string {
   return Math.floor(Math.random() * 1000000000)
@@ -75,15 +77,29 @@ export const accountRouter = router({
 
   fundAccount: protectedProcedure
     .input(
-      z.object({
-        accountId: z.number(),
-        amount: z.number().positive(),
-        fundingSource: z.object({
-          type: z.enum(["card", "bank"]),
-          accountNumber: z.string(),
-          routingNumber: z.string().optional(),
-        }),
-      })
+      z
+        .object({
+          accountId: z.number(),
+          amount: z
+            .number()
+            .refine((n) => n > 0, "Amount must be greater than $0.00")
+            .refine((n) => n <= 10_000, "Amount cannot exceed $10,000"),
+          fundingSource: z.object({
+            type: z.enum(["card", "bank"]),
+            accountNumber: z.string().min(1, "Account or card number is required"),
+            routingNumber: z.string().optional(),
+          }),
+        })
+        .superRefine((data, ctx) => {
+          if (data.fundingSource.type === "bank") {
+            const err = validateRoutingNumber(data.fundingSource.routingNumber ?? "");
+            if (err) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["fundingSource", "routingNumber"], message: err });
+          }
+          if (data.fundingSource.type === "card") {
+            const err = validateCardNumber(data.fundingSource.accountNumber);
+            if (err) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["fundingSource", "accountNumber"], message: err });
+          }
+        })
     )
     .mutation(async ({ input, ctx }) => {
       const amount = parseFloat(input.amount.toString());

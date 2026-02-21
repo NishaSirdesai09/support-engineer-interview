@@ -3,6 +3,10 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { trpc } from "@/lib/trpc/client";
+import { toFormValidate } from "@/lib/validation/refine";
+import { validateFundingAmount, normalizeAmount } from "@/lib/validation/amount";
+import { validateCardNumber } from "@/lib/validation/card";
+import { validateRoutingNumber } from "@/lib/validation/routing";
 
 interface FundingModalProps {
   accountId: number;
@@ -24,6 +28,8 @@ export function FundingModal({ accountId, onClose, onSuccess }: FundingModalProp
     handleSubmit,
     watch,
     formState: { errors },
+    getValues,
+    setValue,
   } = useForm<FundingFormData>({
     defaultValues: {
       fundingType: "card",
@@ -37,15 +43,19 @@ export function FundingModal({ accountId, onClose, onSuccess }: FundingModalProp
     setError("");
 
     try {
-      const amount = parseFloat(data.amount);
+      const amount = parseFloat(data.amount.replace(/,/g, "").trim());
+      if (Number.isNaN(amount) || amount <= 0) {
+        setError("Amount must be greater than $0.00.");
+        return;
+      }
 
       await fundAccountMutation.mutateAsync({
         accountId,
         amount,
         fundingSource: {
           type: data.fundingType,
-          accountNumber: data.accountNumber,
-          routingNumber: data.routingNumber,
+          accountNumber: data.fundingType === "card" ? data.accountNumber.replace(/\D/g, "") : data.accountNumber,
+          routingNumber: data.fundingType === "bank" ? data.routingNumber : undefined,
         },
       });
 
@@ -69,18 +79,10 @@ export function FundingModal({ accountId, onClose, onSuccess }: FundingModalProp
               </div>
               <input
                 {...register("amount", {
-                  required: "Amount is required",
-                  pattern: {
-                    value: /^\d+\.?\d{0,2}$/,
-                    message: "Invalid amount format",
-                  },
-                  min: {
-                    value: 0.0,
-                    message: "Amount must be at least $0.01",
-                  },
-                  max: {
-                    value: 10000,
-                    message: "Amount cannot exceed $10,000",
+                  validate: toFormValidate(validateFundingAmount),
+                  onBlur: () => {
+                    const v = getValues("amount");
+                    if (v) setValue("amount", normalizeAmount(v), { shouldValidate: true });
                   },
                 })}
                 type="text"
@@ -112,15 +114,11 @@ export function FundingModal({ accountId, onClose, onSuccess }: FundingModalProp
             <input
               {...register("accountNumber", {
                 required: `${fundingType === "card" ? "Card" : "Account"} number is required`,
-                pattern: {
-                  value: fundingType === "card" ? /^\d{16}$/ : /^\d+$/,
-                  message: fundingType === "card" ? "Card number must be 16 digits" : "Invalid account number",
-                },
-                validate: {
-                  validCard: (value) => {
-                    if (fundingType !== "card") return true;
-                    return value.startsWith("4") || value.startsWith("5") || "Invalid card number";
-                  },
+                validate: (value) => {
+                  if (fundingType === "card") return validateCardNumber(value ?? "") ?? true;
+                  if (!value?.trim()) return "Account number is required.";
+                  if (!/^\d+$/.test((value ?? "").replace(/\s/g, ""))) return "Account number can only contain digits.";
+                  return true;
                 },
               })}
               type="text"
@@ -135,11 +133,8 @@ export function FundingModal({ accountId, onClose, onSuccess }: FundingModalProp
               <label className="block text-sm font-medium text-muted">Routing Number</label>
               <input
                 {...register("routingNumber", {
-                  required: "Routing number is required",
-                  pattern: {
-                    value: /^\d{9}$/,
-                    message: "Routing number must be 9 digits",
-                  },
+                  required: "Routing number is required for bank transfers",
+                  validate: (v) => validateRoutingNumber(v ?? "") ?? true,
                 })}
                 type="text"
                 className="form-input mt-1 block w-full rounded-md border shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2"
