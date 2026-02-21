@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { trpc } from "@/lib/trpc/client";
 import Link from "next/link";
-import { normalizeEmail, isValidEmailTLD, EMAIL_TLD_ERROR } from "@/lib/validation/email";
+import { normalizeEmail, validateEmail } from "@/lib/validation/email";
+import { toFormValidate } from "@/lib/validation/refine";
 
 type LoginFormData = {
   email: string;
@@ -50,12 +51,7 @@ export default function LoginPage() {
               </label>
               <input
                 {...register("email", {
-                  required: "Email is required",
-                  pattern: {
-                    value: /^\S+@\S+\.\S+$/i,
-                    message: "Invalid email address",
-                  },
-                  validate: (v) => isValidEmailTLD(v || "") || EMAIL_TLD_ERROR,
+                  validate: toFormValidate(validateEmail),
                   onBlur: () => {
                     const raw = getValues("email");
                     if (raw) setValue("email", normalizeEmail(raw), { shouldValidate: true });

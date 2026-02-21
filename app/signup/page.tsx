@@ -5,7 +5,10 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { trpc } from "@/lib/trpc/client";
 import Link from "next/link";
-import { normalizeEmail, isValidEmailTLD, EMAIL_TLD_ERROR } from "@/lib/validation/email";
+import { normalizeEmail, validateEmail } from "@/lib/validation/email";
+import { validateDateOfBirth, getDateOfBirthMin, getDateOfBirthMax } from "@/lib/validation/dateOfBirth";
+import { validateState, STATE_CODES_SORTED } from "@/lib/validation/state";
+import { toFormValidate } from "@/lib/validation/refine";
 
 type SignupFormData = {
   email: string;
@@ -84,12 +87,7 @@ export default function SignupPage() {
                 </label>
                 <input
                   {...register("email", {
-                    required: "Email is required",
-                    pattern: {
-                      value: /^\S+@\S+\.\S+$/i,
-                      message: "Invalid email address",
-                    },
-                    validate: (v) => isValidEmailTLD(v || "") || EMAIL_TLD_ERROR,
+                    validate: toFormValidate(validateEmail),
                     onBlur: () => {
                       const raw = getValues("email");
                       if (raw) setValue("email", normalizeEmail(raw), { shouldValidate: true });
@@ -197,8 +195,12 @@ export default function SignupPage() {
                   Date of Birth
                 </label>
                 <input
-                  {...register("dateOfBirth", { required: "Date of birth is required" })}
+                  {...register("dateOfBirth", {
+                    validate: toFormValidate(validateDateOfBirth),
+                  })}
                   type="date"
+                  min={getDateOfBirthMin()}
+                  max={getDateOfBirthMax()}
                   className="form-input mt-1 block w-full rounded-md border shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2"
                 />
                 {errors.dateOfBirth && <p className="mt-1 text-sm text-red-600">{errors.dateOfBirth.message}</p>}
@@ -256,18 +258,21 @@ export default function SignupPage() {
                   <label htmlFor="state" className="block text-sm font-medium text-muted">
                     State
                   </label>
-                  <input
+                  <select
                     {...register("state", {
                       required: "State is required",
-                      pattern: {
-                        value: /^[A-Z]{2}$/,
-                        message: "Use 2-letter state code",
-                      },
+                      validate: toFormValidate(validateState),
                     })}
-                    type="text"
-                    placeholder="CA"
                     className="form-input mt-1 block w-full rounded-md border shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2"
-                  />
+                    aria-label="State"
+                  >
+                    <option value="">Select</option>
+                    {STATE_CODES_SORTED.map((code) => (
+                      <option key={code} value={code}>
+                        {code}
+                      </option>
+                    ))}
+                  </select>
                   {errors.state && <p className="mt-1 text-sm text-red-600">{errors.state.message}</p>}
                 </div>
 

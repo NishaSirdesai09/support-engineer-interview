@@ -1,3 +1,6 @@
+import { z } from "zod";
+import { refineWith } from "./refine";
+
 /**
  * Common TLD typos that are not valid (e.g. .con instead of .com).
  * Rejecting these avoids accepting clearly invalid addresses.
@@ -19,11 +22,13 @@ const INVALID_TLD_TYPOS = new Set([
   "ogr",
 ]);
 
+const BASIC_EMAIL_REGEX = /^\S+@\S+\.\S+$/i;
+
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-export function isValidEmailTLD(email: string): boolean {
+function isValidEmailTLD(email: string): boolean {
   const parts = email.trim().toLowerCase().split("@");
   if (parts.length !== 2) return false;
   const domain = parts[1];
@@ -33,4 +38,21 @@ export function isValidEmailTLD(email: string): boolean {
   return !INVALID_TLD_TYPOS.has(tld);
 }
 
-export const EMAIL_TLD_ERROR = "Invalid email domain. Check for typos (e.g. .com).";
+/**
+ * Single validator for email. Returns an error message or null if valid.
+ * Use on both backend and frontend so rules and copy stay in one place.
+ */
+export function validateEmail(email: string): string | null {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return "Email is required.";
+  if (!BASIC_EMAIL_REGEX.test(normalized)) return "Invalid email address.";
+  if (!isValidEmailTLD(normalized)) return "Invalid email domain. Check for typos (e.g. .com).";
+  return null;
+}
+
+/** Zod schema for signup/login; reuse so backend stays DRY. */
+export const emailSchema = z
+  .string()
+  .min(1, "Email is required.")
+  .transform(normalizeEmail)
+  .superRefine(refineWith(validateEmail));

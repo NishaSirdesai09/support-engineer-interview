@@ -6,26 +6,24 @@ import { publicProcedure, router } from "../trpc";
 import { db } from "@/lib/db";
 import { users, sessions } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { isValidEmailTLD, normalizeEmail, EMAIL_TLD_ERROR } from "@/lib/validation/email";
+import { emailSchema } from "@/lib/validation/email";
+import { dateOfBirthSchema } from "@/lib/validation/dateOfBirth";
+import { stateSchema } from "@/lib/validation/state";
 
 export const authRouter = router({
   signup: publicProcedure
     .input(
       z.object({
-        email: z
-          .string()
-          .email("Invalid email address")
-          .transform(normalizeEmail)
-          .refine(isValidEmailTLD, { message: EMAIL_TLD_ERROR }),
+        email: emailSchema,
         password: z.string().min(8),
         firstName: z.string().min(1),
         lastName: z.string().min(1),
         phoneNumber: z.string().regex(/^\+?\d{10,15}$/),
-        dateOfBirth: z.string(),
+        dateOfBirth: dateOfBirthSchema,
         ssn: z.string().regex(/^\d{9}$/),
         address: z.string().min(1),
         city: z.string().min(1),
-        state: z.string().length(2).toUpperCase(),
+        state: stateSchema,
         zipCode: z.string().regex(/^\d{5}$/),
       })
     )
@@ -83,11 +81,7 @@ export const authRouter = router({
   login: publicProcedure
     .input(
       z.object({
-        email: z
-          .string()
-          .email("Invalid email address")
-          .transform(normalizeEmail)
-          .refine(isValidEmailTLD, { message: EMAIL_TLD_ERROR }),
+        email: emailSchema,
         password: z.string(),
       })
     )
